@@ -1,0 +1,3 @@
+C:/Users/Intel NUC/STM32CubeIDE/workspace_1.19.0/USB_CDC_Driver_F446_Ext_PHY_HS/Debug/CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir
+C:/Users/Intel NUC/STM32CubeIDE/workspace_1.19.0/USB_CDC_Driver_F446_Ext_PHY_HS/Debug/CMakeFiles/edit_cache.dir
+C:/Users/Intel NUC/STM32CubeIDE/workspace_1.19.0/USB_CDC_Driver_F446_Ext_PHY_HS/Debug/CMakeFiles/rebuild_cache.dir
