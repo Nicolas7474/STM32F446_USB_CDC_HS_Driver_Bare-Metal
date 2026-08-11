@@ -799,6 +799,13 @@ void USB_OTG_HS_Connect(void)
     USB_OTG_HS_DEV->DCTL &= ~USB_OTG_DCTL_SDIS; // // Host will now detect the device
 }
 
+void USB_OTG_HS_Disconnect(void)
+{
+    USB_OTG_DeviceTypeDef *USB_OTG_HS_DEV = ((USB_OTG_DeviceTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE));
+
+    // Set Soft Disconnect bit to pull D+ low/tri-state via ULPI PHY (disconnect device from the bus)
+    USB_OTG_HS_DEV->DCTL |= USB_OTG_DCTL_SDIS; // Host will detect the device disconnection
+}
 
 /**
 * brief  fill endpoint structures with initial data
@@ -1390,6 +1397,11 @@ void enumerate_Setup(){
 		len = 0; // Prepare ZLP for Status Phase
 		break;   // Fall through to EndPoint[0].setTxBuffer
 	default:
+		// For unsupported control requests, stall EP0 IN and OUT
+		// The USB spec dictates that the hw automatically clears the STALL condition on EP0 when a new Setup packet is received
+		// When the host sees that an EP has been stalled, it will issue the standard control request CLEAR_FEATURE (specifically ENDPOINT_HALT)
+		USB_EP_IN(0)->DIEPCTL |= USB_OTG_DIEPCTL_STALL;
+		USB_EP_OUT(0)->DOEPCTL |= USB_OTG_DOEPCTL_STALL;
 		break;
 	}
 

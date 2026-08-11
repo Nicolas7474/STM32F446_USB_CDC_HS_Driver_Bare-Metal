@@ -165,7 +165,6 @@ void SystemClock_Config(void);
 uint32_t USB_OTG_HS_GPIO_Init(void);
 uint32_t USB_OTG_HS_Core_Init(void);
 void USB_OTG_HS_FIFO_and_Interrupts_Init(void);
-void USB_OTG_HS_Connect(void);
 void OTG_HS_IRQHandler(void);
 
 void enumerate_Reset(void);
@@ -187,6 +186,8 @@ uint32_t check_USB_device_status(eDeviceState state);
 void clear_USB_device_status(eDeviceState state);
 
 /* User code functions */
+void USB_OTG_HS_Connect(void);
+void USB_OTG_HS_Disconnect(void);
 uint32_t USB_CDC_Write(uint8_t *txBuff, uint16_t len);
 uint16_t USB_CDC_Read(uint8_t *dest, uint16_t maxLen);
 uint32_t USB_CDC_UserRxCallBack_EP1(uint16_t length); // __WEAK function called upon interrupt XFRC: Transfer completed

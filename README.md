@@ -39,38 +39,37 @@ The implementation provides:
 Only two driver files are intended to be integrated into the application:
 
 ```
-usb\_cdc\_hs.c  
-usb\_cdc\_hs.h
+usb\\\_cdc\\\_hs.c    
+usb\\\_cdc\\\_hs.h
 ```
 
 The current public data API is deliberately simple:
 
 ```
-uint16\_t USB\_CDC\_Read(uint8\_t \*dest, uint16\_t maxLen);  
-uint32\_t USB\_CDC\_Write(uint8\_t \*src, uint16\_t len);
+uint16\\\_t USB\\\_CDC\\\_Read(uint8\\\_t \\\*dest, uint16\\\_t maxLen);    
+uint32\\\_t USB\\\_CDC\\\_Write(uint8\\\_t \\\*src, uint16\\\_t len);
 ```
 
 The circular-buffer implementation remains private to the driver.
-
 
 # 1. USB Endpoint Architecture
 
 The USB device uses three endpoint numbers:
 
 ```
-                     USB DEVICE  
-                         │  
-              ┌──────────┴──────────┐  
-              │                     │  
-             EP0                   CDC  
-          Control pipe              │  
-              │          ┌──────────┼──────────┐  
-              │          │          │          │  
-              │         EP1        EP1        EP2  
-              │          IN        OUT         IN  
-              │        Bulk       Bulk      Interrupt  
-              │          │          │          │  
-              ▼          ▼          ▼       CDC notification  
+                     USB DEVICE    
+                         │    
+              ┌──────────┴──────────┐    
+              │                     │    
+             EP0                   CDC    
+          Control pipe              │    
+              │          ┌──────────┼──────────┐    
+              │          │          │          │    
+              │         EP1        EP1        EP2    
+              │          IN        OUT         IN    
+              │        Bulk       Bulk      Interrupt    
+              │          │          │          │    
+              ▼          ▼          ▼       CDC notification    
            Control      TX         RX
 ```
 
@@ -94,11 +93,11 @@ It handles:
 
 - CDC class requests
 
-- `GET\_LINE\_CODING`
+- `GET\\\_LINE\\\_CODING`
 
-- `SET\_LINE\_CODING`
+- `SET\\\_LINE\\\_CODING`
 
-- `SET\_CONTROL\_LINE\_STATE`
+- `SET\\\_CONTROL\\\_LINE\\\_STATE`
 
 - Endpoint stall management
 
@@ -113,33 +112,33 @@ EP1 IN is the application → host data path.
 The application uses:
 
 ```
-USB\_CDC\_Write(src, len);
+USB\\\_CDC\\\_Write(src, len);
 ```
 
 The internal flow is:
 
 ```
-Application  
-    │  
-    ▼  
-USB\_CDC\_Write()  
-    │  
-    ▼  
-TX circular buffer  
-    │  
-    ▼  
-private TX peek  
-    │  
-    ▼  
-512-byte DMA staging buffer  
-    │  
-    ▼  
-USB OTG HS DMA  
-    │  
-    ▼  
-EP1 IN  
-    │  
-    ▼  
+Application    
+    │    
+    ▼    
+USB\\\_CDC\\\_Write()    
+    │    
+    ▼    
+TX circular buffer    
+    │    
+    ▼    
+private TX peek    
+    │    
+    ▼    
+512-byte DMA staging buffer    
+    │    
+    ▼    
+USB OTG HS DMA    
+    │    
+    ▼    
+EP1 IN    
+    │    
+    ▼    
 Host
 ```
 
@@ -152,25 +151,25 @@ Instead, the driver copies a contiguous block into an aligned DMA staging buffer
 EP1 OUT is the host → application data path.
 
 ```
-Host  
-  │  
-  ▼  
-EP1 OUT  
-  │  
-  ▼  
-USB OTG HS DMA  
-  │  
-  ▼  
-EP1 RX DMA staging buffer  
-  │  
-  │ transfer complete  
-  ▼  
-RX circular buffer  
-  │  
-  ▼  
-USB\_CDC\_Read()  
-  │  
-  ▼  
+Host    
+  │    
+  ▼    
+EP1 OUT    
+  │    
+  ▼    
+USB OTG HS DMA    
+  │    
+  ▼    
+EP1 RX DMA staging buffer    
+  │    
+  │ transfer complete    
+  ▼    
+RX circular buffer    
+  │    
+  ▼    
+USB\\\_CDC\\\_Read()    
+  │    
+  ▼    
 Application
 ```
 
@@ -188,7 +187,6 @@ The current application does not generate notifications, so EP2 remains NAKed.
 
 This is intentional and leaves the descriptor/hardware structure ready for future CDC notification support.
 
-
 # 2. Public Application API
 
 The application should not know that the driver uses circular buffers internally.
@@ -196,14 +194,14 @@ The application should not know that the driver uses circular buffers internally
 The intended abstraction is:
 
 ```
-                 APPLICATION  
-                      │  
-             ┌────────┴────────┐  
-             │                 │  
-             ▼                 ▼  
-      USB\_CDC\_Read()    USB\_CDC\_Write()  
-             │                 │  
-             ▼                 ▼  
+                 APPLICATION    
+                      │    
+             ┌────────┴────────┐    
+             │                 │    
+             ▼                 ▼    
+      USB\\\_CDC\\\_Read()    USB\\\_CDC\\\_Write()    
+             │                 │    
+             ▼                 ▼    
           EP1 OUT            EP1 IN
 ```
 
@@ -212,7 +210,7 @@ The intended abstraction is:
 Use:
 
 ```
-uint16\_t len = USB\_CDC\_Read(dest, sizeof(dest));
+uint16\\\_t len = USB\\\_CDC\\\_Read(dest, sizeof(dest));
 ```
 
 The function returns the number of bytes copied.
@@ -229,22 +227,22 @@ The application does not need to know:
 
 - where the DMA staging buffer is located
 
-`USB\_CDC\_Read()` transparently handles all of this.
+`USB\\\_CDC\\\_Read()` transparently handles all of this.
 
-If more data remains than fits in `dest`, call `USB\_CDC\_Read()` again.
+If more data remains than fits in `dest`, call `USB\\\_CDC\\\_Read()` again.
 
 Typical usage:
 
 ```
-while (1)  
-\{  
-    uint16\_t len = USB\_CDC\_Read(dest, sizeof(dest));  
-  
-    if (len == 0)  
-        break;  
-  
-    /\* Process dest\[0 .. len-1\] \*/  
-\}
+while (1)    
+\\\{    
+    uint16\\\_t len = USB\\\_CDC\\\_Read(dest, sizeof(dest));    
+    
+    if (len == 0)    
+        break;    
+    
+    /\\\* Process dest\\\[0 .. len-1\\\] \\\*/    
+\\\}
 ```
 
 ## Writing
@@ -252,11 +250,10 @@ while (1)
 Use:
 
 ```
-USB\_CDC\_Write(src, len);
+USB\\\_CDC\\\_Write(src, len);
 ```
 
 The internal TX circular buffer, DMA staging buffer, transfer scheduling and transfer-completion handling are hidden from the application.
-
 
 # 3. RX Buffer Ownership
 
@@ -267,31 +264,30 @@ A central design principle of this driver is:
 Internally, the driver uses two private operations:
 
 ```
-static circBufferAddress peek\_circBufferRx(uint16\_t len);  
-static void commit\_circBufferRx(uint16\_t len);
+static circBufferAddress peek\\\_circBufferRx(uint16\\\_t len);    
+static void commit\\\_circBufferRx(uint16\\\_t len);
 ```
 
-These functions are implementation details and are deliberately not exposed in `usb\_cdc\_hs.h`.
+These functions are implementation details and are deliberately not exposed in `usb\\\_cdc\\\_hs.h`.
 
 The safe ownership sequence is:
 
 ```
-peek  
-  │  
-  ▼  
-copy/process  
-  │  
-  ▼  
-commit  
-  │  
-  ▼  
+peek    
+  │    
+  ▼    
+copy/process    
+  │    
+  ▼    
+commit    
+  │    
+  ▼    
 DMA may reuse the released space
 ```
 
-`USB\_CDC\_Read()` implements this sequence internally.
+`USB\\\_CDC\\\_Read()` implements this sequence internally.
 
 The application therefore cannot accidentally re-arm the RX DMA before its copy has completed.
-
 
 # 4. RX Circular Buffer and Wrap-Around
 
@@ -302,39 +298,39 @@ The application sees a linear byte stream.
 For example, if the internal ring contains:
 
 ```
-             read  
-              ↓  
-+--------------------------------+  
-| A A A A A A |       | B B B B |  
-+--------------------------------+  
-                         ↑  
+             read    
+              ↓    
++--------------------------------+    
+| A A A A A A |       | B B B B |    
++--------------------------------+    
+                         ↑    
                         write
 ```
 
 and the application requests 10 bytes:
 
 ```
-USB\_CDC\_Read(dest, 10);
+USB\\\_CDC\\\_Read(dest, 10);
 ```
 
 the driver can internally perform:
 
 ```
-first contiguous block  
-        │  
-        ├── copy 6 bytes  
-        └── commit 6  
-  
-second contiguous block  
-        │  
-        ├── copy 4 bytes  
+first contiguous block    
+        │    
+        ├── copy 6 bytes    
+        └── commit 6    
+    
+second contiguous block    
+        │    
+        ├── copy 4 bytes    
         └── commit 4
 ```
 
 The application receives:
 
 ```
-dest\[0..9\] = A A A A A A B B B B
+dest\\\[0..9\\\] = A A A A A A B B B B
 ```
 
 It never needs to know that the circular buffer wrapped.
@@ -342,7 +338,6 @@ It never needs to know that the circular buffer wrapped.
 This is an important API property:
 
 > **Circular-buffer wrap-around is a driver implementation detail, not an application responsibility.**
-
 
 # 5. RX Back-Pressure
 
@@ -353,28 +348,27 @@ Before arming EP1 OUT DMA, the driver verifies that enough free space exists for
 If the buffer cannot accommodate another complete packet:
 
 ```
-EP1 OUT DMA  
-     │  
-     ▼  
-not armed  
-     │  
-     ▼  
-USB endpoint remains NAKed  
-     │  
-     ▼  
+EP1 OUT DMA    
+     │    
+     ▼    
+not armed    
+     │    
+     ▼    
+USB endpoint remains NAKed    
+     │    
+     ▼    
 Host retries
 ```
 
 Once the application consumes data through:
 
 ```
-USB\_CDC\_Read()
+USB\\\_CDC\\\_Read()
 ```
 
 the driver releases the consumed space and can re-arm EP1 OUT DMA.
 
 This provides natural USB back-pressure instead of overwriting unread application data.
-
 
 # 6. TX Buffer Ownership
 
@@ -394,7 +388,6 @@ Only after the transfer completes is the TX circular-buffer read pointer advance
 
 This prevents the application from reusing memory that USB DMA is still reading.
 
-
 # 7. DMA Staging Buffers
 
 Dedicated linear staging buffers isolate USB DMA from the circular buffers.
@@ -402,30 +395,30 @@ Dedicated linear staging buffers isolate USB DMA from the circular buffers.
 ## RX
 
 ```
-USB DMA  
-   │  
-   ▼  
-linear RX staging buffer  
-   │  
-   ▼  
-memcpy  
-   │  
-   ▼  
+USB DMA    
+   │    
+   ▼    
+linear RX staging buffer    
+   │    
+   ▼    
+memcpy    
+   │    
+   ▼    
 RX circular buffer
 ```
 
 ## TX
 
 ```
-TX circular buffer  
-   │  
-   ▼  
-memcpy  
-   │  
-   ▼  
-linear TX staging buffer  
-   │  
-   ▼  
+TX circular buffer    
+   │    
+   ▼    
+memcpy    
+   │    
+   ▼    
+linear TX staging buffer    
+   │    
+   ▼    
 USB DMA
 ```
 
@@ -435,36 +428,34 @@ It also provides a clean ownership boundary between the USB hardware and applica
 
 All buffers directly accessed by USB DMA are explicitly 4-byte aligned.
 
-
 # 8. EP0 DMA
 
 EP0 is DMA based but retains normal USB control-transfer semantics.
 
-For example, a CDC `SET\_LINE\_CODING` request follows the control-transfer sequence:
+For example, a CDC `SET\\\_LINE\\\_CODING` request follows the control-transfer sequence:
 
 ```
-SETUP packet  
-     │  
-     ▼  
-EP0 OUT DMA  
-     │  
-     ▼  
-7-byte line-coding data  
-     │  
-     ▼  
-transfer complete  
-     │  
-     ▼  
-update lineCoding  
-     │  
-     ▼  
+SETUP packet    
+     │    
+     ▼    
+EP0 OUT DMA    
+     │    
+     ▼    
+7-byte line-coding data    
+     │    
+     ▼    
+transfer complete    
+     │    
+     ▼    
+update lineCoding    
+     │    
+     ▼    
 STATUS IN ZLP
 ```
 
 EP0 therefore is not treated like a normal bulk endpoint.
 
 The driver handles the SETUP, DATA and STATUS stages explicitly.
-
 
 # 9. CDC Descriptor Structure
 
@@ -475,12 +466,12 @@ The configuration contains two CDC interfaces.
 Interface 0 contains the CDC functional descriptors:
 
 ```
-Interface 0  
-    │  
-    ├── Header Functional Descriptor  
-    ├── Call Management Descriptor  
-    ├── ACM Descriptor  
-    ├── Union Descriptor  
+Interface 0    
+    │    
+    ├── Header Functional Descriptor    
+    ├── Call Management Descriptor    
+    ├── ACM Descriptor    
+    ├── Union Descriptor    
     └── EP2 IN Interrupt Notification
 ```
 
@@ -491,7 +482,7 @@ EP2 is currently unused but remains part of the CDC implementation.
 Interface 1 contains:
 
 ```
-EP1 OUT — Bulk  
+EP1 OUT — Bulk    
 EP1 IN  — Bulk
 ```
 
@@ -509,7 +500,6 @@ Maximum Bulk Packet Size = 64 bytes
 
 The driver therefore provides both the normal configuration descriptor and the other-speed configuration descriptor.
 
-
 # 10. USB Serial Number
 
 The driver supports two serial-number sources.
@@ -525,17 +515,16 @@ The UID is converted into 24 hexadecimal characters and stored in the USB UTF-16
 The application can provide its own serial number:
 
 ```
-USB\_CDC\_SetSerialNumber("MY\_PRODUCT\_00123");
+USB\\\_CDC\\\_SetSerialNumber("MY\\\_PRODUCT\\\_00123");
 ```
 
 The driver converts the ASCII string to the USB UTF-16LE descriptor format.
 
 The current maximum is 24 characters.
 
-If `USB\_CDC\_SetSerialNumber()` is never called, the STM32 UID remains the default.
+If `USB\\\_CDC\\\_SetSerialNumber()` is never called, the STM32 UID remains the default.
 
 This makes the driver suitable for both development boards and manufactured products with assigned serial numbers.
-
 
 # 11. USB3300 ULPI Initialization
 
@@ -548,15 +537,14 @@ The ULPI pins are configured for the USB OTG HS alternate function at Very High 
 The ULPI signals include:
 
 ```
-ULPI\_CLK  
-ULPI\_DIR  
-ULPI\_NXT  
-ULPI\_STP  
-ULPI\_D0 ... ULPI\_D7
+ULPI\\\_CLK    
+ULPI\\\_DIR    
+ULPI\\\_NXT    
+ULPI\\\_STP    
+ULPI\\\_D0 ... ULPI\\\_D7
 ```
 
 The USB3300 reset sequence is also handled during USB initialization.
-
 
 # 12. USB OTG HS DMA
 
@@ -565,7 +553,7 @@ The OTG HS controller is configured for DMA operation.
 DMA-accessed buffers are explicitly aligned:
 
 ```
-\_\_attribute\_\_((aligned(4)))
+\\\_\\\_attribute\\\_\\\_((aligned(4)))
 ```
 
 This applies to the relevant:
@@ -582,13 +570,12 @@ This applies to the relevant:
 
 The driver therefore keeps the memory requirements of the USB DMA explicit rather than relying on incidental linker alignment.
 
-
 # 13. FIFO Architecture
 
 The STM32F446 OTG HS FIFO RAM provides:
 
 ```
-4096 bytes  
+4096 bytes    
 1024 × 32-bit words
 ```
 
@@ -597,7 +584,6 @@ The FIFO allocation must remain within the 1024-word hardware limit.
 The FIFO RAM is still used by the OTG HS controller even though the CPU no longer manually services the FIFOs for CDC data transfers.
 
 The driver configures the RX FIFO and the required endpoint TX FIFOs during initialization.
-
 
 # 14. Interrupt Architecture
 
@@ -622,30 +608,29 @@ Transfer-complete events are particularly important because they define DMA owne
 For TX:
 
 ```
-USB DMA active  
-      │  
-      ▼  
-EP1 IN XFRC  
-      │  
-      ▼  
+USB DMA active    
+      │    
+      ▼    
+EP1 IN XFRC    
+      │    
+      ▼    
 release/commit TX data
 ```
 
 For RX:
 
 ```
-USB DMA active  
-      │  
-      ▼  
-EP1 OUT XFRC  
-      │  
-      ▼  
-copy packet to RX ring  
-      │  
-      ▼  
+USB DMA active    
+      │    
+      ▼    
+EP1 OUT XFRC    
+      │    
+      ▼    
+copy packet to RX ring    
+      │    
+      ▼    
 notify application
 ```
-
 
 # 15. ISR vs Application Responsibilities
 
@@ -656,7 +641,7 @@ The application should process received data outside interrupt context.
 The supplied callback:
 
 ```
-uint32\_t USB\_CDC\_UserRxCallBack\_EP1(uint16\_t length);
+uint32\\\_t USB\\\_CDC\\\_UserRxCallBack\\\_EP1(uint16\\\_t length);
 ```
 
 is intended to notify the application that new data is available.
@@ -664,95 +649,93 @@ is intended to notify the application that new data is available.
 A typical callback can simply raise a flag:
 
 ```
-volatile uint8\_t flag = 0;  
-  
-uint32\_t USB\_CDC\_UserRxCallBack\_EP1(uint16\_t length)  
-\{  
-    flag = 1;  
-    return EP\_OK;  
-\}
+volatile uint8\\\_t flag = 0;    
+    
+uint32\\\_t USB\\\_CDC\\\_UserRxCallBack\\\_EP1(uint16\\\_t length)    
+\\\{    
+    flag = 1;    
+    return EP\\\_OK;    
+\\\}
 ```
 
 The main loop then calls:
 
 ```
-USB\_CDC\_Read()
+USB\\\_CDC\\\_Read()
 ```
 
 to retrieve the data.
 
 This keeps application processing out of the USB ISR.
 
-
 # 16. Example Application Flow
 
 A simple echo application can use:
 
 ```
-while (1)  
-\{  
-    if (flag)  
-    \{  
-        flag = 0;  
-  
-        while (1)  
-        \{  
-            uint16\_t len = USB\_CDC\_Read(dest, sizeof(dest));  
-  
-            if (len == 0)  
-                break;  
-  
-            if (USB\_CDC\_Write(dest, len) != EP\_OK)  
-            \{  
-                (void)USB\_CDC\_Write(dest, len);  
-            \}  
-        \}  
-    \}  
-\}
+while (1)    
+\\\{    
+    if (flag)    
+    \\\{    
+        flag = 0;    
+    
+        while (1)    
+        \\\{    
+            uint16\\\_t len = USB\\\_CDC\\\_Read(dest, sizeof(dest));    
+    
+            if (len == 0)    
+                break;    
+    
+            if (USB\\\_CDC\\\_Write(dest, len) != EP\\\_OK)    
+            \\\{    
+                (void)USB\\\_CDC\\\_Write(dest, len);    
+            \\\}    
+        \\\}    
+    \\\}    
+\\\}
 ```
 
 The important point is that the application does not access:
 
 ```
-circBufferRx  
-readPtrRxCbuf  
-writePtrRxCbuf  
-peek\_circBufferRx()  
-commit\_circBufferRx()
+circBufferRx    
+readPtrRxCbuf    
+writePtrRxCbuf    
+peek\\\_circBufferRx()    
+commit\\\_circBufferRx()
 ```
 
 Those are internal driver mechanisms.
-
 
 # 17. Initialization Sequence
 
 The example initialization sequence is:
 
 ```
-SysClockConfig()  
-        │  
-        ▼  
-GPIO\_Config()  
-        │  
-        ▼  
-InterruptGPIO\_Config()  
-        │  
-        ▼  
-SystemClock\_Config()  
-        │  
-        ▼  
-USB\_OTG\_HS\_GPIO\_Init()  
-        │  
-        ▼  
-USB\_OTG\_HS\_Core\_Init()  
-        │  
-        ▼  
-USB\_OTG\_HS\_FIFO\_and\_Interrupts\_Init()  
-        │  
-        ▼  
-USB\_OTG\_HS\_Connect()  
-        │  
-        ▼  
+SysClockConfig()    
+        │    
+        ▼    
+GPIO\\\_Config()    
+        │    
+        ▼    
+InterruptGPIO\\\_Config()    
+        │    
+        ▼    
+SystemClock\\\_Config()    
+        │    
+        ▼    
+USB\\\_OTG\\\_HS\\\_GPIO\\\_Init()    
+        │    
+        ▼    
+USB\\\_OTG\\\_HS\\\_Core\\\_Init()    
+        │    
+        ▼    
+USB\\\_OTG\\\_HS\\\_FIFO\\\_and\\\_Interrupts\\\_Init()    
+        │    
+        ▼    
+USB\\\_OTG\\\_HS\\\_Connect()    
+        │    
+        ▼    
 USB enumeration
 ```
 
@@ -760,10 +743,9 @@ The FIFO and interrupt configuration is performed before connecting the device t
 
 The USB reset handler then initializes endpoint/DMA state as part of enumeration.
 
-
 # 18. Reset and Recovery
 
-`USB\_CDC\_ForceResetState()` resets the software state associated with USB CDC transfers.
+`USB\\\_CDC\\\_ForceResetState()` resets the software state associated with USB CDC transfers.
 
 Reset/recovery handling resets the relevant:
 
@@ -783,43 +765,50 @@ EP1 OUT is re-primed only when the RX buffer has enough free space for the next 
 
 This keeps reset/recovery consistent with the normal RX ownership model.
 
+# 19. Connection and Disconnection Control 
 
-# 19. Important Design Invariants
+The driver provides explicit control over the physical bus connection via the ULPI PHY soft-disconnect feature with USB\_OTG\_HS\_Connect() and USB\_OTG\_HS\_Disconnect().
+
+USB\_OTG\_HS\_Connect(): Clears the Soft Disconnect bit (SDIS) in the device control register (DCTL), pulling D+ high via the ULPI PHY to signal presence to the host and trigger enumeration.This is useful for forcing re-enumeration, entering low-power/sleep modes, or handling software resets.
+
+USB\_OTG\_HS\_Disconnect(): Sets the Soft Disconnect bit (SDIS), pulling D+ low/tri-stating the line to electronically detach the device from the host without physically unplugging the cable.
+
+# 20. Important Design Invariants
 
 The driver relies on the following invariants.
 
 ### RX
 
 ```
-USB DMA writes only to the dedicated RX DMA staging buffer.  
-  
-The RX circular buffer is not released until the application has  
-finished copying/processing the data.  
-  
-USB\_CDC\_Read() performs the copy before releasing the consumed space.
+USB DMA writes only to the dedicated RX DMA staging buffer.    
+    
+The RX circular buffer is not released until the application has    
+finished copying/processing the data.    
+    
+USB\\\_CDC\\\_Read() performs the copy before releasing the consumed space.
 ```
 
 ### TX
 
 ```
-USB DMA reads only from the dedicated TX DMA staging buffer.  
-  
-TX circular-buffer data remains reserved until the USB transfer completes.  
-  
+USB DMA reads only from the dedicated TX DMA staging buffer.    
+    
+TX circular-buffer data remains reserved until the USB transfer completes.    
+    
 The TX read pointer is advanced only after XFRC.
 ```
 
 ### EP1 OUT
 
 ```
-EP1 OUT DMA is not armed unless sufficient RX buffer space exists  
+EP1 OUT DMA is not armed unless sufficient RX buffer space exists    
 for the transfer.
 ```
 
 ### EP0
 
 ```
-Control transfers are handled according to the USB SETUP/DATA/STATUS  
+Control transfers are handled according to the USB SETUP/DATA/STATUS    
 sequence.
 ```
 
@@ -831,85 +820,82 @@ DMA-accessed buffers are explicitly 4-byte aligned.
 
 These invariants are the foundation of the driver architecture.
 
-
-# 20. Data Flow Example — RX
+# 21. Data Flow Example — RX
 
 For a 512-byte packet received from the host:
 
 ```
-Host  
- │  
- │ 512-byte USB Bulk OUT  
- ▼  
-EP1 OUT  
- │  
- ▼  
-USB DMA  
- │  
- ▼  
-RX DMA staging buffer  
- │  
- │ XFRC  
- ▼  
-RX circular buffer  
- │  
- ▼  
-USB\_CDC\_UserRxCallBack\_EP1()  
- │  
- ▼  
-Application  
- │  
- ▼  
-USB\_CDC\_Read(dest, ...)  
- │  
- ├── private peek  
- ├── memcpy  
- └── private commit  
- │  
- ▼  
+Host    
+ │    
+ │ 512-byte USB Bulk OUT    
+ ▼    
+EP1 OUT    
+ │    
+ ▼    
+USB DMA    
+ │    
+ ▼    
+RX DMA staging buffer    
+ │    
+ │ XFRC    
+ ▼    
+RX circular buffer    
+ │    
+ ▼    
+USB\\\_CDC\\\_UserRxCallBack\\\_EP1()    
+ │    
+ ▼    
+Application    
+ │    
+ ▼    
+USB\\\_CDC\\\_Read(dest, ...)    
+ │    
+ ├── private peek    
+ ├── memcpy    
+ └── private commit    
+ │    
+ ▼    
 EP1 OUT DMA can reuse released space
 ```
 
-If the ring wraps, `USB\_CDC\_Read()` repeats the private peek/copy/commit sequence internally. The application still receives one linear block.
+If the ring wraps, `USB\\\_CDC\\\_Read()` repeats the private peek/copy/commit sequence internally. The application still receives one linear block.
 
-
-# 21. Data Flow Example — TX
+# 22. Data Flow Example — TX
 
 ```
-Application  
- │  
- ▼  
-USB\_CDC\_Write()  
- │  
- ▼  
-TX circular buffer  
- │  
- ▼  
-private TX peek  
- │  
- ▼  
-TX DMA staging buffer  
- │  
- ▼  
-USB DMA  
- │  
- ▼  
-EP1 IN  
- │  
- ▼  
-Host  
- │  
- ▼  
-XFRC  
- │  
- ▼  
+Application    
+ │    
+ ▼    
+USB\\\_CDC\\\_Write()    
+ │    
+ ▼    
+TX circular buffer    
+ │    
+ ▼    
+private TX peek    
+ │    
+ ▼    
+TX DMA staging buffer    
+ │    
+ ▼    
+USB DMA    
+ │    
+ ▼    
+EP1 IN    
+ │    
+ ▼    
+Host    
+ │    
+ ▼    
+XFRC    
+ │    
+ ▼    
 private TX commit
 ```
 
 The application does not need to wait for or manage USB DMA completion directly.
 
-
-# 22. Why the Driver Uses Staging Buffers
+# 23. Why the Driver Uses Staging Buffers
 
 The staging buffers solve two problems at once.
 
@@ -926,31 +912,30 @@ The staging buffers also make USB DMA ownership explicit.
 For RX:
 
 ```
-DMA owns staging buffer  
-       │  
-       ▼  
-transfer complete  
-       │  
-       ▼  
+DMA owns staging buffer    
+       │    
+       ▼    
+transfer complete    
+       │    
+       ▼    
 driver copies to RX ring
 ```
 
 For TX:
 
 ```
-driver copies from TX ring  
-       │  
-       ▼  
-DMA owns staging buffer  
-       │  
-       ▼  
+driver copies from TX ring    
+       │    
+       ▼    
+DMA owns staging buffer    
+       │    
+       ▼    
 transfer complete
 ```
 
 This separation makes the concurrency model easier to reason about.
 
-
-# 23. Generic Driver Philosophy
+# 24. Generic Driver Philosophy
 
 The driver is intended to be reusable rather than tied to one application.
 
@@ -959,18 +944,18 @@ The public API should therefore expose **USB CDC behavior**, not implementation 
 Prefer:
 
 ```
-USB\_CDC\_Read()  
-USB\_CDC\_Write()  
-USB\_CDC\_SetSerialNumber()
+USB\\\_CDC\\\_Read()    
+USB\\\_CDC\\\_Write()    
+USB\\\_CDC\\\_SetSerialNumber()
 ```
 
 rather than exposing:
 
 ```
-peek\_circBufferRx()  
-commit\_circBufferRx()  
-circBufferRx  
-readPtrRxCbuf  
+peek\\\_circBufferRx()    
+commit\\\_circBufferRx()    
+circBufferRx    
+readPtrRxCbuf    
 writePtrRxCbuf
 ```
 
@@ -979,64 +964,62 @@ The latter are implementation mechanisms and should remain private.
 The result is a clean boundary:
 
 ```
-┌──────────────────────────────────────────┐  
-│              Application                 │  
-│                                          │  
-│  USB\_CDC\_Read()                          │  
-│  USB\_CDC\_Write()                         │  
-│  USB\_CDC\_SetSerialNumber()               │  
-│  USB\_CDC\_UserRxCallBack\_EP1()            │  
-└──────────────────┬───────────────────────┘  
-                   │  
-             Public API  
-                   │  
-┌──────────────────▼───────────────────────┐  
-│             USB CDC Driver               │  
-│                                          │  
-│  Circular buffers                        │  
-│  DMA staging buffers                     │  
-│  Endpoint state                          │  
-│  USB descriptors                         │  
-│  DMA scheduling                          │  
-│  Interrupt handling                      │  
-│  ULPI / OTG HS hardware                  │  
-└──────────────────┬───────────────────────┘  
-                   │  
-                   ▼  
-              STM32F446  
-                   │  
-                   ▼  
+┌──────────────────────────────────────────┐    
+│              Application                 │    
+│                                          │    
+│  USB\\\_CDC\\\_Read()                          │    
+│  USB\\\_CDC\\\_Write()                         │    
+│  USB\\\_CDC\\\_SetSerialNumber()               │    
+│  USB\\\_CDC\\\_UserRxCallBack\\\_EP1()            │    
+└──────────────────┬───────────────────────┘    
+                   │    
+             Public API    
+                   │    
+┌──────────────────▼───────────────────────┐    
+│             USB CDC Driver               │    
+│                                          │    
+│  Circular buffers                        │    
+│  DMA staging buffers                     │    
+│  Endpoint state                          │    
+│  USB descriptors                         │    
+│  DMA scheduling                          │    
+│  Interrupt handling                      │    
+│  ULPI / OTG HS hardware                  │    
+└──────────────────┬───────────────────────┘    
+                   │    
+                   ▼    
+              STM32F446    
+                   │    
+                   ▼    
                USB3300
 ```
 
-
-# 24. Integration
+# 25. Integration
 
 The intended integration is lightweight:
 
 ```
-usb\_cdc\_hs.c  
-usb\_cdc\_hs.h
+usb\\\_cdc\\\_hs.c    
+usb\\\_cdc\\\_hs.h
 ```
 
 The application provides the platform-specific functions required by the project and may implement:
 
 ```
-USB\_CDC\_UserRxCallBack\_EP1()
+USB\\\_CDC\\\_UserRxCallBack\\\_EP1()
 ```
 
 The application can then use:
 
 ```
-USB\_CDC\_Read()  
-USB\_CDC\_Write()  
-USB\_CDC\_SetSerialNumber()
+USB\\\_CDC\\\_Read()    
+USB\\\_CDC\\\_Write()    
+USB\\\_CDC\\\_SetSerialNumber()
 ```
 
 without knowing the internal DMA/circular-buffer implementation.
 
-
-# 25. Current Limitations / Future Work
+# 26. Current Limitations / Future Work
 
 ### EP2 Serial-State notifications
 
@@ -1058,66 +1041,64 @@ USB CDC provides a byte stream. Any framing, packetization, command protocol, CR
 
 The RX/TX circular-buffer sizes and DMA staging buffers are compile-time design choices and can be adapted to the application.
 
-
-# 26. Summary
+# 27. Summary
 
 The core architecture can be summarized as:
 
 ```
-                       USB3300  
-                          │  
-                          ▼  
-                 STM32F446 OTG HS  
-                          │  
-          ┌───────────────┼────────────────┐  
-          │               │                │  
-         EP0             EP1              EP2  
-       Control           Data          Notification  
-          │          ┌────┴────┐             │  
-          │          │         │             │  
-          │         IN        OUT            │  
-          │          │         │             │  
-          ▼          ▼         ▼             ▼  
-         DMA        TX        RX          Reserved  
-                    │         │  
-                    ▼         ▼  
-              DMA staging buffers  
-                    │         │  
-                    ▼         ▼  
-              circular buffers  
-                    │         │  
-                    └────┬────┘  
-                         │  
-                         ▼  
-                    Application  
-                         │  
-              ┌──────────┴──────────┐  
-              │                     │  
-              ▼                     ▼  
-       USB\_CDC\_Read()       USB\_CDC\_Write()
+                       USB3300    
+                          │    
+                          ▼    
+                 STM32F446 OTG HS    
+                          │    
+          ┌───────────────┼────────────────┐    
+          │               │                │    
+         EP0             EP1              EP2    
+       Control           Data          Notification    
+          │          ┌────┴────┐             │    
+          │          │         │             │    
+          │         IN        OUT            │    
+          │          │         │             │    
+          ▼          ▼         ▼             ▼    
+         DMA        TX        RX          Reserved    
+                    │         │    
+                    ▼         ▼    
+              DMA staging buffers    
+                    │         │    
+                    ▼         ▼    
+              circular buffers    
+                    │         │    
+                    └────┬────┘    
+                         │    
+                         ▼    
+                    Application    
+                         │    
+              ┌──────────┴──────────┐    
+              │                     │    
+              ▼                     ▼    
+       USB\\\_CDC\\\_Read()       USB\\\_CDC\\\_Write()
 ```
 
 The most important ownership rules are:
 
 ```
-RX:  peek → copy/process → commit → DMA may reuse  
-  
+RX:  peek → copy/process → commit → DMA may reuse    
+    
 TX:  peek → DMA → XFRC → commit
 ```
 
 The application-facing interface hides these mechanisms and presents the USB CDC device as a simple byte stream.
 
-
 ## Public API at a glance
 
 ```
-uint16\_t USB\_CDC\_Read(uint8\_t \*dest, uint16\_t maxLen);  
-  
-uint32\_t USB\_CDC\_Write(uint8\_t \*src, uint16\_t len);  
-  
-uint32\_t USB\_CDC\_SetSerialNumber(const char \*serial);  
-  
-uint32\_t USB\_CDC\_UserRxCallBack\_EP1(uint16\_t length);
+uint16\\\_t USB\\\_CDC\\\_Read(uint8\\\_t \\\*dest, uint16\\\_t maxLen);    
+    
+uint32\\\_t USB\\\_CDC\\\_Write(uint8\\\_t \\\*src, uint16\\\_t len);    
+    
+uint32\\\_t USB\\\_CDC\\\_SetSerialNumber(const char \\\*serial);    
+    
+uint32\\\_t USB\\\_CDC\\\_UserRxCallBack\\\_EP1(uint16\\\_t length);
 ```
 
 The first three are driver services; the callback is the application hook used to notify the application that EP1 OUT has received new data.
