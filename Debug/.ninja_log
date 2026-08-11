@@ -1,12 +1,15 @@
 # ninja log v5
-3	218	8081082026642361	build.ninja	b9458473d2598b69
+6	191	8081571860052183	build.ninja	b9458473d2598b69
 7	534	8081035010834029	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Startup/startup_stm32f446vetx.s.obj	1542adc8d89d3e3d
-56	720	8081035013860792	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/sysmem.c.obj	5d63dc7fe9c0eff2
 8	313	8081081248263310	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/main.c.obj	a2571269b6a5ccce
+56	720	8081035013860792	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/sysmem.c.obj	5d63dc7fe9c0eff2
 35	845	8081035015113175	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/syscalls.c.obj	271c58c398989cdd
 6	27	0	clean	253aedb83a02ccb6
 94	830	8081035014933662	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/myConfig.c.obj	c90b12870323181f
 42	446	8081062339808018	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/timers.c.obj	6ccd16cb1da39c2f
 25	660	8081062342001665	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/usb_cdc_hs.c.obj	db4113151ff62fdd
 314	588	8081081250307381	USB_CDC_Driver_F446_Ext_PHY_HS.elf	c64f9c45d56b75d9
-6	191	8081082026642361	build.ninja	b9458473d2598b69
+13	685	8081571860052183	build.ninja	b9458473d2598b69
+232	1649	8081571876800750	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/usb_cdc_hs.c.obj	db4113151ff62fdd
+17	332	8081572083043562	CMakeFiles/USB_CDC_Driver_F446_Ext_PHY_HS.dir/Sources/main.c.obj	a2571269b6a5ccce
+333	1955	8081572097047935	USB_CDC_Driver_F446_Ext_PHY_HS.elf	c64f9c45d56b75d9

@@ -14,9 +14,6 @@ volatile uint8_t flag = 0; // 0 = no data, 1 = data arrived
  * only needs to hold one contiguous block returned by peek_circBufferRx(). */
 static uint8_t dest[MAX_CDC_EP1_TX_SIZ] __attribute__((aligned(4)));
 
-/* You can make this global for debug purposes. */
-static circBufferAddress getData;
-
 uint32_t SystemCoreClock = 180000000; // system_stm32f4xx.c is not included in this project so we define SystemCoreClock manually
 volatile uint32_t msTicks = 0; // Volatile ensures the compiler doesn't optimize out reads of this value
 
