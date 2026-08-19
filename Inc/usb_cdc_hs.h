@@ -212,6 +212,7 @@ typedef struct {
 } circBufferAddress;
 
 extern uint8_t circBufferRx[CIRC_BUFFER_RX_SIZE];
+extern volatile uint16_t rxWrapLimit;
 
 
 /******************************************************************************

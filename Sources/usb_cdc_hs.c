@@ -426,6 +426,7 @@ __WEAK uint32_t GetSysTick(void) {
 __attribute__((aligned(4))) static uint8_t circBufferTx[CIRC_BUFFER_TX_SIZE];
 static volatile uint16_t writePtrTxCbuf = 0U;
 static volatile uint16_t readPtrTxCbuf = 0U;
+volatile uint16_t rxWrapLimit = CIRC_BUFFER_RX_SIZE; // Dynamic wrap boundary for zero-copy DMA padding
 
 /*
  * EP1 IN DMA staging buffer.
@@ -453,7 +454,7 @@ static volatile uint16_t readPtrRxCbuf = 0U; // make is static again if ISR func
  * unaligned DMA addresses and circular-buffer wrap-around crossing the end
  * of the array.
  */
-__attribute__((aligned(4))) static uint8_t ep1RxDmaBuffer[RX_BUFFER_EP1_SIZE];
+__attribute__((aligned(4))) static uint8_t ep1RxDmaBuffer[RX_BUFFER_EP1_SIZE]; // staging buffer
 static volatile uint16_t ep1RxPendingIndex = 0U;
 
 
@@ -481,12 +482,13 @@ static inline uint32_t get_circBufferRx_freeSize(){
 	/* Snapshot pointers to avoid interrupt race conditions - the pointers aren't modified, so no need to __disable_irq() here */
 	uint16_t w = writePtrRxCbuf; // copying the values of volatile global variables into local variables at the beginning of a function  creates a "frozen"
 	uint16_t r = readPtrRxCbuf; // version of the state that won't change while your math is running, even if an interrupt fires in the middle of your calculation.
+	uint16_t limit = rxWrapLimit; // Snapshot the dynamic limit
 
 	// We return SIZE - 1 to ensure we always leave one gap (the "N-1" Rule for full buffer)
 	if (w == r) return CIRC_BUFFER_RX_SIZE - 1; // Empty
 	if (w > r) {
 		// Data is contiguous: free space is the two ends
-		return CIRC_BUFFER_RX_SIZE - (w - r) - 1;
+		return limit - (w - r) - 1;
 	} else {
 		// Data is wrapped: free space is the gap in the middle
 		return (r - w) - 1;
@@ -580,6 +582,7 @@ circBufferAddress peek_circBufferRx(uint16_t requested_Len) {
      * but readPtrRxCbuf is owned by the application until commit_circBufferRx(). */
     uint16_t w = writePtrRxCbuf;
     uint16_t r = readPtrRxCbuf;
+    uint16_t limit = rxWrapLimit; // Snapshot the dynamic limit
 
     /* Direct data count (N-1 compliant). */
     uint16_t actualData;
@@ -590,7 +593,7 @@ circBufferAddress peek_circBufferRx(uint16_t requested_Len) {
         actualData = w - r;
     }
     else {
-        actualData = (CIRC_BUFFER_RX_SIZE - r) + w;
+    	actualData = (limit - r) + w; // Use dynamic limit
     }
 
     /* Clamp requested length to the data currently available. */
@@ -599,7 +602,7 @@ circBufferAddress peek_circBufferRx(uint16_t requested_Len) {
 
     /* Return only a contiguous block. The application must call peek again after
      * commit_circBufferRx() to consume data on the other side of the wrap. */
-    if ((r + len) > CIRC_BUFFER_RX_SIZE) {
+    if ((r + len) > limit) { 						// Clamp to dynamic limit
         result.len = (uint16_t)(CIRC_BUFFER_RX_SIZE - r);
     }
     else {
@@ -620,8 +623,10 @@ void commit_circBufferRx(uint16_t len) {
     __disable_irq();
 
     uint16_t nextReadPtr = (uint16_t)(readPtrRxCbuf + len);
-    if (nextReadPtr >= CIRC_BUFFER_RX_SIZE) {
-        nextReadPtr = 0;
+
+    if (nextReadPtr >= rxWrapLimit) {   // Check against the dynamic limit and restore upon wrapping
+    	nextReadPtr = 0;
+    	rxWrapLimit = CIRC_BUFFER_RX_SIZE; // Restore the limit for the next cycle
     }
     readPtrRxCbuf = nextReadPtr;
 
@@ -855,6 +860,7 @@ void USB_OTG_HS_Disconnect(void)
 * param
 * retval
 */
+
 static uint8_t USB_CDC_prepare_EP1_OUT_DMA(void)
 {
 	uint16_t w = writePtrRxCbuf;
@@ -877,7 +883,10 @@ static uint8_t USB_CDC_prepare_EP1_OUT_DMA(void)
 	if (w >= r) {
 		if ((CIRC_BUFFER_RX_SIZE - w) < RX_BUFFER_EP1_SIZE) {
 			/* Not enough contiguous space until the end; wrap to the beginning. */
-			if (r >= RX_BUFFER_EP1_SIZE) {
+			if (r > RX_BUFFER_EP1_SIZE) {
+				// Because of the N-1 rule, if r = 512 and w = 0, the calculated free space is actually 511 bytes. A full 512B DMA packet (RX_BUFFER_EP1_SIZE)
+				// requires at least 512B free, meaning r needs to be strictly greater than 512 for the wrap to be safe without breaking the safety margin.
+				rxWrapLimit = w; // Lock in the exact boundary where valid data ends *
 				w = 0;
 				writePtrRxCbuf = 0;
 			} else {
@@ -1018,6 +1027,7 @@ void USB_CDC_ForceResetState(void) {
     writePtrRxCbuf = 0;
     readPtrTxCbuf = 0;
     writePtrTxCbuf = 0;
+    rxWrapLimit = CIRC_BUFFER_RX_SIZE; // Restore default boundary
     ep1TxPendingLen = 0;
     ep1RxPendingIndex = 0;
     EndPoint[0].txCounter = 0;
