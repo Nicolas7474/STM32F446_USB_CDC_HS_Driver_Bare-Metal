@@ -49,12 +49,8 @@ void heartBeatLed(void)
     RTC->PRER = (127U << RTC_PRER_PREDIV_A_Pos)   // Async prescaler = 128
               | (127U << RTC_PRER_PREDIV_S_Pos);  // Sync prescaler  = 128
 
-    RTC->WUTR = 0;                                // Wakeup counter = 0
-
-    RTC->CR &= ~RTC_CR_WUCKSEL;                   // Clear wakeup clock selection
-    RTC->CR |= RTC_CR_WUCKSEL_1
-            | RTC_CR_WUCKSEL_0;                   // Select ck_spre
-
+    RTC->WUTR = 1023;    			 			  // Wakeup counter,  set reload counter for 500 ms interval
+    RTC->CR &= ~RTC_CR_WUCKSEL;   			      // Select RTCCLK / 16 (WUCKSEL = 000)
     RTC->ISR &= ~RTC_ISR_WUTF;                    // Clear RTC wakeup flag
 
     EXTI->IMR |= EXTI_IMR_IM22;                   // Enable EXTI22 (RTC wakeup)

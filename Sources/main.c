@@ -19,13 +19,13 @@ volatile uint32_t msTicks = 0; // Volatile ensures the compiler doesn't optimize
 
 int main(void)
 {
-	/* 0. Configure SysTick for 1ms interrupts using CMSIS SystemCoreClock */
+	/* 0. Configure USB power / clock-dependent settings. */
+	SystemClock_Config();
+
+	/* 1. Configure SysTick for 1ms interrupts using CMSIS SystemCoreClock */
 	if (SysTick_Config(SystemCoreClock / 1000)) {
 		NVIC_SystemReset(); // reset if return value indicate a failure (1)
 	}
-
-	/* 1. Configure USB power / clock-dependent settings. */
-	SystemClock_Config();
 
 	/* 2. Configure USB3300 PHY pins, release reset, and turn on AHB1 clocks. */
 	USB_OTG_HS_GPIO_Init();
@@ -50,11 +50,16 @@ int main(void)
 
     heartBeatLed();
 
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
     /* Give the host time to detect and enumerate the device.
      * This delay is only useful for the example/debug application;
      * it is not required by the USB CDC driver itself.
      */
-    NBdelay_ms(4000);
+    NBdelay_ms(2000);
+
 
     while (1)
     {
@@ -103,17 +108,16 @@ void RTC_WKUP_IRQHandler(void)
 {
     if (RTC->ISR & RTC_ISR_WUTF)
     {
-        /* Clear RTC Wakeup Timer flag */
-        RTC->ISR &= ~RTC_ISR_WUTF;
+        /* Clear RTC Wakeup Timer flag safely */
+        RTC->ISR = ~(RTC_ISR_WUTF);
 
         /* Clear EXTI22 pending flag */
         EXTI->PR = EXTI_PR_PR22;
 
-        /*PE3 is active LOW:  */
+        /* PE3 is active LOW: toggle LED */
         GPIOE->ODR ^= GPIO_ODR_OD3;
     }
 }
-
 
 // The SysTick handler is predefined in the vector table
 void SysTick_Handler(void) {

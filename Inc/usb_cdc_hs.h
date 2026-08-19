@@ -226,12 +226,12 @@ extern uint8_t circBufferRx[CIRC_BUFFER_RX_SIZE];
 #define USB_CDC_MAX_PACKET_SIZE		512 /* 512 bytes for High-Speed Bulk */
 #define USB_CDC_CONTROL_EP          0U
 #define USB_CDC_DATA_IN_EP          1U
-#define USB_CDC_NOTIFICATION_EP		2U
-#define USB_CDC_NOTIFICATION_MPS	8U
-#define USB_CDC_NOTIFICATION_INTERVAL	0x10U /* 16 microframes at HS; host polling interval */
+//#define USB_CDC_NOTIFICATION_EP		2U
+//#define USB_CDC_NOTIFICATION_MPS	8U
+//#define USB_CDC_NOTIFICATION_INTERVAL	0x10U /* 16 microframes at HS; host polling interval */
 
 #define EP0_SIZE			64
-#define EP_COUNT			3
+#define EP_COUNT			2
 
 
 #define USBD_VID				    	1155
@@ -239,7 +239,8 @@ extern uint8_t circBufferRx[CIRC_BUFFER_RX_SIZE];
 #define USBD_PID_HS				   		22336
 
 #define DEVICE_DESCRIPTOR_LENGTH		18
-#define CONFIGURATION_DESCRIPTOR_LENGTH 67 /* 60-byte CDC data config + 7-byte EP2 notification descriptor */
+#define CONFIGURATION_DESCRIPTOR_LENGTH 68 /* 60-byte CDC data config + 7-byte EP2 notification descriptor */
+#define OTHER_SPEED_CONFIGURATION_DESCRIPTOR_LENGTH 60
 
 #define LANG_DESCRIPTOR_LENGTH			4
 #define MFC_DESCRIPTOR_LENGTH			38
@@ -256,7 +257,7 @@ extern uint8_t circBufferRx[CIRC_BUFFER_RX_SIZE];
 extern const uint8_t deviceDescriptor[DEVICE_DESCRIPTOR_LENGTH];
 extern const uint8_t configurationDescriptor[CONFIGURATION_DESCRIPTOR_LENGTH];
 extern const uint8_t deviceQualifierDescriptor[DEVICE_QUALIFIER_LENGTH];
-extern const uint8_t otherSpeedConfigurationDescriptor[CONFIGURATION_DESCRIPTOR_LENGTH];
+extern const uint8_t otherSpeedConfigurationDescriptor[OTHER_SPEED_CONFIGURATION_DESCRIPTOR_LENGTH];
 extern const uint8_t languageStringDescriptor[LANG_DESCRIPTOR_LENGTH];
 extern const uint8_t manufactorStringDescriptor[MFC_DESCRIPTOR_LENGTH];
 extern const uint8_t productStringDescriptor[PRODUCT_DESCRIPTOR_LENGTH];
