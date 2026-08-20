@@ -5,9 +5,12 @@
 - Lightweight, only two files to add to your project: usb_cdc_hs.c and usb_cdc_hs.h
 
 - Usage:
-  - USB_CDC_UserRxCallBack_EP1()
-    This callback is triggered when new data has been received on EP1 OUT.
-    The argument is the number of bytes received.
+ -  USB_OTG_HS_Connect() makes the USB device visible to the host.
+    This releases the OTG HS soft-disconnect state and allows enumeration.
+
+  - USB_OTG_HS_Disconnect() disconnects logically the device from the host without
+    removing power. The USB OTG HS core enters the soft-disconnect state, causing the
+    pull-up to be removed from the bus as though the physical USB cable had been unplugged.
 
   - Use USB_CDC_Read(dest, maxLen) to read received data from the USB CDC
     RX buffer into your application buffer.
@@ -18,12 +21,15 @@
     are completely transparent to the application.
     If more data is available than fits in your application buffer,
     call USB_CDC_Read() again to consume the remaining data.
-
     USB_CDC_Read() automatically:
 		  - handles circular-buffer wrap-around
 		  - copies the received data into the application buffer
 		  - releases the consumed RX data only after it has been copied
 		  - re-arms EP1 OUT DMA when buffer space becomes available
+
+  - USB_CDC_UserRxCallBack_EP1(len)
+    This callback is triggered when new data has been received on EP1 OUT.
+    The argument is the number of bytes received.
 
   - Use USB_CDC_Write(src, len) to send data to the VCOM host.
     Example: USB_CDC_Write(srcBuff, len);
@@ -36,7 +42,8 @@
 
   - USB descriptors are defined in usb_cdc_hs.c and their declarations/constants are in usb_cdc_hs.h
 *
-*  Tested at a solid KB/s (Rx) and MB/s (Tx, with Powershell script)
+*  Rx speed tested on my Windows 10 at a rather low 6,8 MB/s (HAL driver measured exactly the same) and Tx at 6,2 MB/s
+*  Can probably be faster with another host (to be tested)
 *
 ***********************************************************************************************************************/
 
@@ -51,7 +58,9 @@
 #define RX_BUFFER_EP0_SIZE 64U // 8 is normally enough but 64 costs almost nothing in RAM and can prevent the most common USB crashes
 #define RX_BUFFER_EP1_SIZE 512 // In HS mode, the bulk OUT EP packet size (DOEPT_TRANSFER_SIZE) is defined as 512 bytes
 
+uint8_t circBufferRx[CIRC_BUFFER_RX_SIZE];
 __attribute__((aligned(4))) static uint8_t rxBufferEp0[RX_BUFFER_EP0_SIZE]; /* Received data is stored here after application reads DFIFO. RX FIFO is shared */
+
 
 /**********************************************************************
  * 	The application will set linecoding according to the host request
@@ -60,36 +69,6 @@ __attribute__((aligned(4))) static uint8_t rxBufferEp0[RX_BUFFER_EP0_SIZE]; /* R
    or the standard "115200, 8-N-1" default : 115200 (0x0001C200), 1 Stop bit (0), No Parity (0), 8 Data bits (8)
 */
 __attribute__((aligned(4))) static uint8_t lineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x08};
-
-
-static void ITM_PrintHex16(uint16_t value)
-{
-    const char hex[] = "0123456789ABCDEF";
-
-    ITM_SendChar('0');
-    ITM_SendChar('x');
-
-    ITM_SendChar(hex[(value >> 12) & 0x0F]);
-    ITM_SendChar(hex[(value >>  8) & 0x0F]);
-    ITM_SendChar(hex[(value >>  4) & 0x0F]);
-    ITM_SendChar(hex[(value >>  0) & 0x0F]);
-
-    ITM_SendChar('\r');
-    ITM_SendChar('\n');
-}
-
-static void ITM_PrintHex32(uint32_t value)
-{
-    for (int i = 7; i >= 0; i--)
-    {
-        uint8_t nibble = (value >> (i * 4)) & 0xF;
-
-        if (nibble < 10)
-            ITM_SendChar('0' + nibble);
-        else
-            ITM_SendChar('A' + nibble - 10);
-    }
-}
 
 /* USB descriptors are defined here (not in the header) so they are stored only once. */
 /* Device string descriptor */
@@ -147,7 +126,7 @@ const uint8_t configurationDescriptor [CONFIGURATION_DESCRIPTOR_LENGTH] __attrib
 	0x04,  /*  bDescriptorType: Interface */
 	0x00,   /* bInterfaceNumber: Number of Interface */
 	0x00,   /* bAlternateSetting: Alternate setting */
-	0x00,   /* bNumEndpoints: bNumEndpoints: no notification endpoint // one CDC notification IN endpoint (EP2) */
+	0x01,   /* bNumEndpoints: one CDC notification IN endpoint (EP2) */
 	0x02,   /* bInterfaceClass: Communication Interface Class */
 	0x02,   /* bInterfaceSubClass: Abstract Control Model */
 	0x01,   /* bInterfaceProtocol: Common AT Commands (CDC ACM) */
@@ -164,7 +143,7 @@ const uint8_t configurationDescriptor [CONFIGURATION_DESCRIPTOR_LENGTH] __attrib
 	0x05,   /* bFunctionLength */
 	0x24,   /* bDescriptorType: CS_INTERFACE */
 	0x01,   /* bDescriptorSubtype: Call Management Func Desc */
-	0x00,   /* bmCapabilities: D0+D1 */
+	0x00,   /* bmCapabilities */
 	0x01,   /* bDataInterface: 1 */
 
 	/*ACM Functional Descriptor*/
@@ -181,16 +160,16 @@ const uint8_t configurationDescriptor [CONFIGURATION_DESCRIPTOR_LENGTH] __attrib
 	0x01,   /* bSlaveInterface0: Data Class Interface */
 
 	/* CDC notification endpoint (required by the CDC ACM communication interface).
-	 * EP2 IN is intentionally not used by the current application, but it is part
-	 * of the CDC ACM implementation requirements. The endpoint is configured in
-	 * hardware and left NAKed until a Serial-State notification is implemented. */
-//	0x07,   /* bLength */
-//	0x05,   /* bDescriptorType: Endpoint */
-//	(0x80U | USB_CDC_NOTIFICATION_EP),   /* bEndpointAddress: EP2 IN */
-//	0x03,   /* bmAttributes: Interrupt */
-//	LOBYTE(USB_CDC_NOTIFICATION_MPS),
-//	HIBYTE(USB_CDC_NOTIFICATION_MPS),
-//	USB_CDC_NOTIFICATION_INTERVAL,
+	 * EP2 IN is intentionally stalled by the current application, but still implemented
+	 * since it is part of the CDC ACM implementation requirements. The endpoint is configured
+	 * in hardware and can be un-stalled and un-Naked if needed. */
+	0x07,   /* bLength */
+	0x05,   /* bDescriptorType: Endpoint */
+	(0x80U | USB_CDC_NOTIFICATION_EP),   /* bEndpointAddress: EP2 IN */
+	0x03,   /* bmAttributes: Interrupt */
+	LOBYTE(USB_CDC_NOTIFICATION_MPS),
+	HIBYTE(USB_CDC_NOTIFICATION_MPS),
+	USB_CDC_NOTIFICATION_INTERVAL,
 
 	/*---------------------------------------------------------------------------*/
 
@@ -250,6 +229,15 @@ const uint8_t otherSpeedConfigurationDescriptor [OTHER_SPEED_CONFIGURATION_DESCR
     0x00,                               /* iConfiguration */
     0xC0,                               /* bmAttributes: Self-powered */
     0x32,                               /* MaxPower: 100 mA */
+	/* Interface Association Descriptor */
+	0x08,
+	0x0B,
+	0x00,
+	0x02,
+	0x02,
+	0x02,
+	0x01,
+	0x00,
     /* Interface 0 (CDC Control) */
     0x09, 0x04, 0x00, 0x00, 0x01, 0x02, 0x02, 0x01, 0x00,
     /* Header Functional Descriptor */
@@ -261,9 +249,9 @@ const uint8_t otherSpeedConfigurationDescriptor [OTHER_SPEED_CONFIGURATION_DESCR
     /* Union Functional Descriptor */
     0x05, 0x24, 0x06, 0x00, 0x01,
     /* CDC notification endpoint (required by CDC ACM; not used by the application). */
-//    0x07, 0x05, (0x80U | USB_CDC_NOTIFICATION_EP), 0x03,
-//    LOBYTE(USB_CDC_NOTIFICATION_MPS), HIBYTE(USB_CDC_NOTIFICATION_MPS),
-//    USB_CDC_NOTIFICATION_INTERVAL,
+    0x07, 0x05, (0x80U | USB_CDC_NOTIFICATION_EP), 0x03,
+    LOBYTE(USB_CDC_NOTIFICATION_MPS), HIBYTE(USB_CDC_NOTIFICATION_MPS),
+    USB_CDC_NOTIFICATION_INTERVAL,
     /* Interface 1 (CDC Data) */
     0x09, 0x04, 0x01, 0x00, 0x02, 0x0A, 0x00, 0x00, 0x00,
     /* Endpoint OUT Descriptor (FS Bulk: Max Packet Size = 64 bytes) */
@@ -405,6 +393,7 @@ static uint8_t USB_CDC_prepare_EP1_OUT_DMA(void);
 
 static circBufferAddress peek_circBufferRx(uint16_t len);
 static void commit_circBufferRx(uint16_t len);
+static void write_to_circBufferTx(uint8_t *buf, uint16_t len);
 
 /**********************************************************************
  * GetSysTick() is required for Timeout detection in several functions
@@ -426,7 +415,7 @@ __WEAK uint32_t GetSysTick(void) {
 __attribute__((aligned(4))) static uint8_t circBufferTx[CIRC_BUFFER_TX_SIZE];
 static volatile uint16_t writePtrTxCbuf = 0U;
 static volatile uint16_t readPtrTxCbuf = 0U;
-volatile uint16_t rxWrapLimit = CIRC_BUFFER_RX_SIZE; // Dynamic wrap boundary for zero-copy DMA padding
+volatile uint16_t rxWrapLimit = CIRC_BUFFER_RX_SIZE; // Dynamic wrap boundary
 
 /*
  * EP1 IN DMA staging buffer.
@@ -619,7 +608,11 @@ void commit_circBufferRx(uint16_t len) {
     if (len == 0) return;
 
     /* The application has finished using the previously peeked data.
-     * Only now may the consumed space become available to the USB RX DMA. */
+     * Only now may the consumed space become available to the USB RX DMA.
+     *
+    TheISR can also execute USB_CDC_prepare_EP1_OUT_DMA(), and that function reads/writes the same RX-buffer state.
+    In particular, it snapshots writePtrRxCbuf, readPtrRxCbuf, and rxWrapLimit, and in the wrap case it can modify rxWrapLimit and writePtrRxCbuf
+    */
     __disable_irq();
 
     uint16_t nextReadPtr = (uint16_t)(readPtrRxCbuf + len);
@@ -693,15 +686,14 @@ uint32_t USB_OTG_HS_GPIO_Init(void)
                  |  RCC_AHB1ENR_OTGHSEN
                  |  RCC_AHB1ENR_OTGHSULPIEN;
 
-    /* 2. Release USB3300 Hardware Reset (PA6) after a small delay (50ms)
-     * Set PA6 as Output-Low to release PHY reset and enable 60 MHz CLKOUT.   */
 
+    // 2. Configure PA6 as GPIO Output and set it (1) to reset the USB3300 at startup
     GPIOA->MODER   &= ~(0x3 << (6 * 2));
     GPIOA->MODER   |=  (0x1 << (6 * 2));  // General purpose output
     GPIOA->OTYPER  &= ~(1 << 6);          // Push-pull
     GPIOA->OSPEEDR |=  (0x3 << (6 * 2));  // Very High Speed
-    GPIOA->BSRR     =  (1 << 6);   // Drive High (Reset)
-    for (volatile uint32_t i = 0; i < 600000; i++) { __NOP(); }
+    GPIOA->BSRR     =  (1 << 6);   		  // Drive High (Reset)
+    for (volatile uint32_t i = 0; i < 2000000; i++) { __NOP(); }  // small reset delay > 40ms
 
     /* 3. Configure ULPI GPIO Pins to AF10 (Very High Speed)
      * PA3 (D0), PA5 (CK)
@@ -741,7 +733,9 @@ uint32_t USB_OTG_HS_GPIO_Init(void)
     GPIOC->AFR[0] &= ~((0xF << (0 * 4)) | (0xF << (2 * 4)) | (0xF << (3 * 4)));
     GPIOC->AFR[0] |=  ((0xA << (0 * 4)) | (0xA << (2 * 4)) | (0xA << (3 * 4)));
 
-    GPIOA->BSRR     =  (1 << (6 + 16));   // Drive Low (crucial: release Reset AFTER configuring the ULPI)
+    /* 4. Release USB3300 Hardware Reset (PA6)
+    * Release PHY reset and enable 60 MHz CLKOUT.   */
+    GPIOA->BSRR =  (1 << (6 + 16));   // Drive Low (crucial: release Reset AFTER configuring the ULPI)
 
     for (volatile int i = 0; i < 10000; i++);  // Brief delay for USB3300 clock (ULPI_CK) to stabilize
 
@@ -812,20 +806,15 @@ void USB_OTG_HS_FIFO_and_Interrupts_Init(void)
 
     // EP2 TX FIFO (CDC notification IN): Start @ 832, Depth = 16 words (64 bytes).
     // Total allocation = 512 + 64 + 256 + 16 = 848 words, below the 1024-word HS FIFO RAM.
-    //USB_OTG_HS->DIEPTXF[1] = (16 << USB_OTG_DIEPTXF_INEPTXFD_Pos) | (512 + 64 + 256);
+    USB_OTG_HS->DIEPTXF[1] = (16 << USB_OTG_DIEPTXF_INEPTXFD_Pos) | (512 + 64 + 256);
 
     /* 2. Clear pending interrupts */
     USB_OTG_HS->GINTSTS = 0xFFFFFFFF; // Global Interrupt Status Register
 
     /* 3. Unmask required core interrupts */
-    /* USB_OTG_HS->GINTMSK = USB_OTG_GINTMSK_RXFLVLM  | // RX FIFO Non-Empty (FIFO Level Mask)
+    USB_OTG_HS->GINTMSK = USB_OTG_GINTMSK_RXFLVLM  | // RX FIFO Non-Empty (FIFO Level Mask)
                           USB_OTG_GINTMSK_USBRST   | // USB Reset
-                          USB_OTG_GINTMSK_ENUMDNM  | // Enumeration Done
-                          USB_OTG_GINTMSK_IEPINT   | // IN Endpoint Interrupt
-                          USB_OTG_GINTMSK_OEPINT   | // OUT Endpoint Interrupt
-                          USB_OTG_GINTMSK_WUIM;      // Resume/Wakeup Interrupt */
-    USB_OTG_HS->GINTMSK = USB_OTG_GINTMSK_USBRST   | // USB Reset
-    					  USB_OTG_GINTMSK_ENUMDNEM | // Enumeration Done
+                          USB_OTG_GINTMSK_ENUMDNEM | // Enumeration Done
                           USB_OTG_GINTMSK_IEPINT   | // IN Endpoint Interrupt
                           USB_OTG_GINTMSK_OEPINT   | // OUT Endpoint Interrupt
                           USB_OTG_GINTMSK_WUIM;      // Resume/Wakeup Interrupt
@@ -886,7 +875,7 @@ static uint8_t USB_CDC_prepare_EP1_OUT_DMA(void)
 			if (r > RX_BUFFER_EP1_SIZE) {
 				// Because of the N-1 rule, if r = 512 and w = 0, the calculated free space is actually 511 bytes. A full 512B DMA packet (RX_BUFFER_EP1_SIZE)
 				// requires at least 512B free, meaning r needs to be strictly greater than 512 for the wrap to be safe without breaking the safety margin.
-				rxWrapLimit = w; // Lock in the exact boundary where valid data ends *
+				rxWrapLimit = w; // Lock in the exact boundary where valid data ends
 				w = 0;
 				writePtrRxCbuf = 0;
 			} else {
@@ -947,13 +936,25 @@ static void initEndPoints(){
 	/* --- Hardware: Setup EP1 OUT (Bulk) for DMA Reception --- */
 	USB_CDC_prepare_EP1_OUT_DMA();
 
-	/* --- Hardware: EP2 IN CDC notification endpoint --- */
-//	USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPCTL = USB_OTG_DIEPCTL_SNAK |
-//		USB_OTG_DIEPCTL_TXFNUM_1 | /* TX FIFO number 2 */
-//		USB_OTG_DIEPCTL_EPTYP_0 | /* Interrupt endpoint */
-//		USB_OTG_DIEPCTL_USBAEP |
-//		USB_CDC_NOTIFICATION_MPS;
-	/* EP2 remains NAKed until a Serial-State notification is implemented. */
+	/* EP2 IN CDC notification endpoint: CDC ACM defines EP2 as the notification EP.
+	 * This driver currently does not implement Serial-State notifications, so EP2 is deliberately STALLED
+	 * to prevent periodic host polling (4ms on Windows !) from generating unnecessary USB traffic/interrupt activity.
+	 * If CDC notifications are required in the future:
+	 *   1. Remove USB_OTG_DIEPCTL_STALL below.
+	 *   2. Keep USB_OTG_DIEPCTL_SNAK while no notification is pending.
+	 *   3. Implement the Serial-State notification transfer and clear NAK  only when a notification is ready.
+	 */
+	USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPCTL =
+			USB_OTG_DIEPCTL_SNAK  |
+			USB_OTG_DIEPCTL_STALL | 			 // Stall the EP to stop host polling
+			USB_OTG_DIEPCTL_TXFNUM_1 |
+			(3UL << USB_OTG_DIEPCTL_EPTYP_Pos) | // Safely sets EPTYP to Interrupt (3)
+			USB_OTG_DIEPCTL_USBAEP |
+			USB_CDC_NOTIFICATION_MPS;
+
+
+	// Zero out transfer size so it doesn't fire phantom packets
+	USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPTSIZ = 0;
 
 	USB_OTG_HS->GINTSTS = 0xFFFFFFFF; 			 	// Reset Global Interrupt status (core interrupt register OTG_GINTSTS)
 	USB_OTG_DEVICE->DCTL &= ~USB_OTG_DCTL_SDIS;     // Clearing the bit (~) releases the soft disconnect, effectively "plugging" the device back in virtually
@@ -1036,11 +1037,11 @@ void USB_CDC_ForceResetState(void) {
     EndPoint[1].txCounter = 0;
     EndPoint[1].statusTx = EP_READY;
     EndPoint[1].totXferLen = 0;
-//    EndPoint[2].txCounter = 0;
-//    EndPoint[2].statusTx = EP_READY;
-//    EndPoint[2].totXferLen = 0;
+    EndPoint[2].txCounter = 0;
+    EndPoint[2].statusTx = EP_READY;
+    EndPoint[2].totXferLen = 0;
 
-    // 3. Harware FIFO flush : Flush TX FIFO 0 (or whichever FIFO your IN endpoint uses)
+    // 3. Hardware FIFO flush
     USB_OTG_HS->GRSTCTL = (1 << 5) | (16 << 6); // 0x20: TxFIFO Flush + all Tx FIFO
     while (USB_OTG_HS->GRSTCTL & (1 << 5));    // Wait for hardware to finish flushing
 
@@ -1048,11 +1049,11 @@ void USB_CDC_ForceResetState(void) {
     USB_OTG_HS->GRSTCTL = (1 << 4);            // 0x10: RxFIFO Flush
     while (USB_OTG_HS->GRSTCTL & (1 << 4));    // Wait for hardware to finish flushing
 
-    // 4. Clear stuck interrupts: Clear any pending transfer complete or error flags for EP1 (your CDC data EP)
+    // 4. Clear stuck interrupts: Clear any pending transfer complete or error flags for EP1 and EP2
     // Writing 1 to these bits usually clears them in CMSIS/Bare-metal
     USB_EP_OUT(1)->DOEPINT = 0xFF;
     USB_EP_IN(1)->DIEPINT  = 0xFF;
-    //USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPINT  = 0xFF;
+    USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPINT  = 0xFF;
 
     // 5. RE-PRIME THE RECEIVE ENDPOINT (The "Unstick" Step)
     // If a big packet caused a NAK, try to start listening again for a fresh packet.
@@ -1080,8 +1081,7 @@ void send_zlp(uint8_t EPnum) {
 
     // Set Transfer Size: 1 packet, 0 bytes. We do this in one write to ensure hardware atomic-like update
     USB_EP_IN(EPnum)->DIEPTSIZ = (1 << USB_OTG_DIEPTSIZ_PKTCNT_Pos) & USB_OTG_DIEPTSIZ_PKTCNT_Msk;
-    __DMB(); // Ensure the register write is finished before enabling EP
-
+    //__DMB(); // Ensure the register write is finished before enabling EP
     // Enable the endpoint and clear NAK to allow the Host to read the 0-byte packet
     USB_EP_IN(EPnum)->DIEPCTL |= USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA;
 
@@ -1158,9 +1158,7 @@ uint32_t USB_CDC_transferTXCallback(uint8_t EPnum){
 
     	// 2. Point DMA engine directly to the control buffer source address
     	USB_EP_IN(0)->DIEPDMA = (uint32_t)(EndPoint[0].txBuffer_ptr);
-
-     	__DMB();
-
+     	//__DMB();
     	// 3. Arm EP and trigger the hardware DMA transfer immediately across the AHB bus
     	USB_EP_IN(0)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
     }
@@ -1179,11 +1177,7 @@ uint32_t USB_CDC_transferTXCallback(uint8_t EPnum){
     	// Note: EndPoint[EPnum].txBuffer_ptr points to the aligned EP1 DMA staging buffer.
     	// You supply the exact source pointer address:
     	USB_EP_IN(EPnum)->DIEPDMA = (uint32_t)(EndPoint[EPnum].txBuffer_ptr);
-
-     	__DMB();
-
-    	__DMB(); // Ensure the DMA source copy and DMA address are visible before EPENA
-
+    	//__DMB();
     	// 3. Arm EP and trigger the hardware DMA transfer (firing the endpoint enable EPENA) immediately across the AHB bus
     	USB_EP_IN(EPnum)->DIEPCTL |= (USB_OTG_DIEPCTL_CNAK | USB_OTG_DIEPCTL_EPENA);
     	// No manual FIFO servicing is needed: the hardware DMA engine streams the whole payload directly from RAM
@@ -1204,10 +1198,6 @@ uint32_t USB_CDC_setTxBuffer(uint8_t EPnum, uint8_t *txBuff, uint16_t len){
 										|| (check_USB_device_status(DEVICE_STATE_TX_PR) == EP_OK)) {
 		return EP_FAILED;
 	}
-
-	// 1. REMOVE the 128-byte cap check!
-	// The hardware DIEPTSIZ register can handle up to 512KB. Let's allow len up to 4096 for now.
-	if(len > 4096) return EP_FAILED;
 
 	/* Set data to send */
 	if(len != 0){
@@ -1299,11 +1289,10 @@ void enumerate_Reset(){
 	/* 3. RECONFIGURE ENDPOINTS 							    */
 	/************************************************************/
 
-
 	USB_OTG_HS->GINTSTS = 0xFFFFFFFF; // reset OTG core interrupt register
 
 	/* OTG all endpoints interrupt mask register */
-	USB_OTG_DEVICE->DAINTMSK = 0x00030000U | (1U << 0) | (1U << 1); //| (1U << USB_CDC_NOTIFICATION_EP); // IEPINT-> IN EP0, EP1 & EP2 interrupts unmasked, OEPINT: OUT endpoint 0 & 1 interrupts unmasked
+	USB_OTG_DEVICE->DAINTMSK = 0x00030000U | (1U << 0) | (1U << 1) | (1U << USB_CDC_NOTIFICATION_EP); // IEPINT-> IN EP0, EP1 & EP2 interrupts unmasked, OEPINT: OUT endpoint 0 & 1 interrupts unmasked
 	USB_OTG_DEVICE->DOEPMSK  = USB_OTG_DOEPMSK_STUPM | USB_OTG_DOEPMSK_XFRCM; /* Unmask SETUP Phase done Mask,  TransfeR Completed interrupt for OUT */
 	USB_OTG_DEVICE->DIEPMSK  = USB_OTG_DIEPMSK_XFRCM; /* TransfeR Completed interrupt for IN */
 
@@ -1323,15 +1312,28 @@ void enumerate_Reset(){
 			USB_CDC_MAX_PACKET_SIZE;
 
 	initEndPoints(); /* Now that EP1 OUT is configured, let initEndPoints()
-	 	 	 	 	  * program DMA and actually arm EP0/EP1. */
+	  	  	  	  	    program DMA and actually arm EP0/EP1. */
 
-	/* EP2 is part of the CDC ACM descriptor even though the application does not
-	 * currently send Serial-State notifications. Keep it NAKed until needed. */
-//	USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPCTL = USB_OTG_DIEPCTL_SNAK |
-//			USB_OTG_DIEPCTL_TXFNUM_1 |
-//			USB_OTG_DIEPCTL_EPTYP_0 |
-//			USB_OTG_DIEPCTL_USBAEP |
-//			USB_CDC_NOTIFICATION_MPS;
+	/* EP2 IN CDC notification endpoint: CDC ACM defines EP2 as the notification EP.
+	 * It is an Interrupt IN endpoint only: the host polls EP2 with IN tokens, and the device may return
+	 * a CDC notification on this EP2 (e.g. SERIAL_STATE). There is no EP2 OUT endpoint.
+	 * This driver currently does not implement Serial-State notifications, so EP2 is deliberately STALLED
+	 * to prevent periodic host polling (4ms on Windows !) from generating unnecessary USB traffic/interrupt activity.
+	 * If CDC notifications are required in the future:
+	 *   1. Remove USB_OTG_DIEPCTL_STALL below.
+	 *   2. Keep USB_OTG_DIEPCTL_SNAK while no notification is pending.
+	 *   3. Implement the Serial-State notification transfer and clear NAK  only when a notification is ready.
+	 */
+	USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPCTL =
+			USB_OTG_DIEPCTL_SNAK  |
+			USB_OTG_DIEPCTL_STALL | 			 // Stall the EP to stop host polling
+			USB_OTG_DIEPCTL_TXFNUM_1 |
+			(3UL << USB_OTG_DIEPCTL_EPTYP_Pos) | // Safely sets EPTYP to Interrupt (3)
+			USB_OTG_DIEPCTL_USBAEP |
+			USB_CDC_NOTIFICATION_MPS;
+
+	// Zero out transfer size so it doesn't fire phantom packets
+	USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPTSIZ = 0;
 }
 
 
@@ -1362,7 +1364,6 @@ void enumerate_Setup(){
 		case DESCRIPTOR_TYPE_DEVICE_QUALIFIER: 			/* Request 0x0680  Value 0x0600 */
 			if(DEVICE_QUALIFIER_LENGTH < len) len = DEVICE_QUALIFIER_LENGTH;
 			memcpy(dest, deviceQualifierDescriptor, len);
-			//	return; /* CUBE MX CDC actually doesn't send any data here */
 			break;
 		case DESCRIPTOR_TYPE_OTHER_SPEED_CONFIGURATION: 	/* Request 0x0680  Value 0x0700 */
 			// Returns the configuration structure that would apply if connected at FS (64-byte Bulk packets instead of 512)
@@ -1399,19 +1400,18 @@ void enumerate_Setup(){
 			return;
 		}
 		break;
-
-	case REQ_TYPE_DEVICE_TO_HOST_SET_ADDRESS: 				/* Request 0x0500  */
+	case REQ_TYPE_HOST_TO_DEVICE_SET_ADDRESS: 				/* Request 0x0500  */
 		len=0; /* ZLP */
 		USB_OTG_DEVICE->DCFG &= ~((uint32_t)0x7F << 4); // Clear the 7-bit DAD field (bits 4 to 10) first!
 		USB_OTG_DEVICE->DCFG |= (uint32_t)(setup_pkt_data.setup_pkt.wValue << 4);
 		device_state = DEVICE_STATE_ADDRESSED;
 		break;
-	case REQ_TYPE_DEVICE_TO_HOST_SET_CONFIGURATION: 			/* Request 0x0900  */
+	case REQ_TYPE_HOST_TO_DEVICE_SET_CONFIGURATION: 			/* Request 0x0900  */
 		len=0; /* ZLP */
-		//USB_CDC_ForceResetState(); // When the PC assigns an address or sets the configuration, it will start a fresh session with this hardware
 		device_state = DEVICE_STATE_CONFIGURED;
+		 /* Configuration is established by the host. Do not reset the USB data paths here:
+		    this request is part of normal enumeration and the endpoints have already been initialized. */
 		break;
-
 	case CDC_GET_LINE_CODING: 						/* Request 0x21A1  */
 		if(CDC_LINE_CODING_LENGTH < len) len = CDC_LINE_CODING_LENGTH;
 		memcpy(dest, lineCoding, len);
@@ -1424,9 +1424,10 @@ void enumerate_Setup(){
 	    return;
 	case CDC_SET_CONTROL_LINE_STATE: /* Request 0x2221 - when click "Connect" in TeraTerm, the PC sends this request (Data Terminal Ready signal) */
 		len=0;
-		// USB_CDC_ForceResetState(); // Ensures that if there is no "garbage" left in the circular buffer from a previous session
+		 /* The host is updating the CDC control-line state (DTR/RTS).
+		    This driver does not currently use these signals, so no USB state reset or EP reinitialization is required */
 		break;
-	case CLEAR_FEATURE_ENDP: 						/* Request 0x0201  */
+	case CLEAR_FEATURE_ENDP: {						/* Request 0x0102  */
 		uint8_t ep_num = setup_pkt_data.setup_pkt.wIndex & 0x7F;
 		uint8_t is_in = setup_pkt_data.setup_pkt.wIndex & 0x80;
 		if (is_in) {
@@ -1442,6 +1443,7 @@ void enumerate_Setup(){
 		}
 		len = 0; // Prepare ZLP for Status Phase
 		break;   // Fall through to EndPoint[0].setTxBuffer
+	}
 	default:
 		// For unsupported control requests, stall EP0 IN and OUT
 		// The USB spec dictates that the hw automatically clears the STALL condition on EP0 when a new Setup packet is received
@@ -1601,7 +1603,8 @@ __WEAK uint32_t USB_CDC_UserRxCallBack_EP1(uint16_t length){
 
 uint16_t USB_CDC_Read(uint8_t *dest, uint16_t maxLen)
 {
-    uint16_t total = 0;
+
+	uint16_t total = 0;
 
     while (total < maxLen)
     {
@@ -1743,25 +1746,24 @@ void OTG_HS_IRQHandler(){
 			            USB_EP_IN(1)->DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
 			        }
 		    }
-
 		    // Safety: Clear any other pending bits for this EP
 		    USB_EP_IN(1)->DIEPINT = IN_interrupt;
 		    }
 
 		// --- Check EP2 IN (CDC notification endpoint) ---
-//		if (epnums & (1U << USB_CDC_NOTIFICATION_EP)) {
-//			uint32_t IN_interrupt = USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPINT;
-//			if (IN_interrupt & USB_OTG_DIEPINT_XFRC) {
-//				/* No Serial-State notification producer is implemented yet.
-//				 * EP2 remains NAKed after any completed notification transfer. */
-//				USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
-//			}
-//			USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPINT = IN_interrupt;
-//		}
+		if (epnums & (1U << USB_CDC_NOTIFICATION_EP)) {
+			uint32_t IN_interrupt = USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPINT;
+			if (IN_interrupt & USB_OTG_DIEPINT_XFRC) {
+				/* No Serial-State notification producer is implemented yet.
+				 * EP2 remains NAKed after any completed notification transfer,
+				 * although this is no needed by default (permanently stalled) */
+				USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
+			}
+			USB_EP_IN(USB_CDC_NOTIFICATION_EP)->DIEPINT = IN_interrupt;
+		}
 	}
 	// DO NOT call USB_CLEAR_INTERRUPT(USB_OTG_GINTSTS_IEPINT) here! It is a read-only logical OR of the individual endpoint interrupts.
 	// If you manually write to GINTSTS to clear IEPINT, you might accidentally clear EP1's "Global" flag before you've had a chance to see EP1's flag.
-	//USB_CLEAR_INTERRUPT(USB_OTG_GINTSTS_IEPINT);
 
 	/***************************************************************/
 	/*************** OUT endpoint event - OEPINT ********************
@@ -1792,17 +1794,8 @@ void OTG_HS_IRQHandler(){
 				uint16_t request = ((uint16_t)setup_pkt_data.setup_pkt.bRequest << 8) |
 						setup_pkt_data.setup_pkt.bmRequestType;
 
-				ITM_SendChar('R');
-				ITM_PrintHex32(request);
-				ITM_SendChar(' ');
-				ITM_PrintHex32(len);
-				ITM_SendChar('\r');
-				ITM_SendChar('\n');
-
-
 				if ((request == CDC_SET_LINE_CODING) && (len > 0))
 					EndPoint[0].rxCallBack(CDC_SET_LINE_CODING);
-
 
 				/* Re-arm EP0 OUT for DMA reception, preserving the Setup Count so the hardware can continue to intercept incoming USB setup commands. */
 				uint32_t ep0_pktcnt = (RX_BUFFER_EP0_SIZE + MAX_CDC_EP0_TX_SIZ - 1) / MAX_CDC_EP0_TX_SIZ;
@@ -1837,34 +1830,34 @@ void OTG_HS_IRQHandler(){
 			uint32_t epint = USB_EP_OUT(1)->DOEPINT; /* Read out Endpoint Interrupt register for EP1 */
 
 			// XFRC: Transfer completed interrupt. Indicates that the programmed transfer is complete on the AHB as well as on the USB, for this endpoint.
-			if(epint & USB_OTG_DOEPINT_XFRC){
+			if (epint & USB_OTG_DOEPINT_XFRC)
+			{
 
 				uint16_t remaining =
-					USB_EP_OUT(1)->DOEPTSIZ & USB_OTG_DOEPTSIZ_XFRSIZ;
+						(uint16_t)(USB_EP_OUT(1)->DOEPTSIZ & USB_OTG_DOEPTSIZ_XFRSIZ);
 
-				uint16_t len = RX_BUFFER_EP1_SIZE - remaining;
+				uint16_t len = (uint16_t)(RX_BUFFER_EP1_SIZE - remaining);
 
 				/*
-				 * USB DMA wrote to the staging buffer. Now that XFRC has
-				 * confirmed completion, commit the received bytes to the
-				 * circular buffer and advance its write pointer.
+				 * USB DMA wrote to the aligned staging buffer.
+				 * Commit the received bytes to the circular buffer.
 				 */
-				if (len > 0) {
-					memcpy(&circBufferRx[ep1RxPendingIndex],
-					       ep1RxDmaBuffer,
-					       len);
+				if (len > 0U)
+				{
+					memcpy(&circBufferRx[ep1RxPendingIndex], ep1RxDmaBuffer, len);
 
 					writePtrRxCbuf = (uint16_t)(ep1RxPendingIndex + len);
+
 					if (writePtrRxCbuf >= CIRC_BUFFER_RX_SIZE)
 						writePtrRxCbuf = 0;
 
 					ep1RxPendingIndex = writePtrRxCbuf;
 
-					EndPoint[1].rxCallBack(len); // EndPoint[i].rxCallBack = &USB_CDC_transferRXCallback_EP1
+					EndPoint[1].rxCallBack(len);
 				}
 
-				// Re-arm EP1 OUT for the next DMA reception.
 				USB_CDC_prepare_EP1_OUT_DMA();
+
 			}
 			CLEAR_OUT_EP_INTERRUPT(1, epint);
 		}

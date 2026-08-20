@@ -66,7 +66,6 @@ This is shared between:
 #define EP_READY 				0U
 #define EP_BUSY  				1U
 #define EP_ZLP   				2U
-#define EP_WAIT  				3U
 
 /***************************************************
  * EP functions return values
@@ -85,15 +84,15 @@ typedef enum {
 	DEVICE_STATE_LINECODED =		4,
 	DEVICE_STATE_CONFIGURED =		8,
 	DEVICE_STATE_TX_PR =			16, /* TX in PRogress */
-	DEVICE_STATE_TX_FIFO1_ERROR =	32,
+	// DEVICE_STATE_TX_FIFO1_ERROR =	32, // unused
 } eDeviceState;
 /***************************************************
  * SETUP stage request templates
 ***************************************************/
 
 #define REQ_TYPE_HOST_TO_DEVICE_GET_DEVICE_DECRIPTOR	0x0680
-#define REQ_TYPE_DEVICE_TO_HOST_SET_ADDRESS				0x0500
-#define REQ_TYPE_DEVICE_TO_HOST_SET_CONFIGURATION		0x0900
+#define REQ_TYPE_HOST_TO_DEVICE_SET_ADDRESS				0x0500
+#define REQ_TYPE_HOST_TO_DEVICE_SET_CONFIGURATION		0x0900
 
 #define DESCRIPTOR_TYPE_DEVICE							0x0100
 #define DESCRIPTOR_TYPE_CONFIGURATION					0x0200
@@ -204,14 +203,11 @@ extern volatile uint32_t msTicks;
 #define CIRC_BUFFER_TX_SIZE USB_CDC_CIRC_BUFFER_SIZE // 2048
 #define CIRC_BUFFER_RX_SIZE USB_CDC_CIRC_BUFFER_SIZE
 
-void write_to_circBufferTx(uint8_t *buf, uint16_t len);
-
 typedef struct {
 	uint16_t index;
 	uint16_t len;
 } circBufferAddress;
 
-extern uint8_t circBufferRx[CIRC_BUFFER_RX_SIZE];
 extern volatile uint16_t rxWrapLimit;
 
 
@@ -223,31 +219,29 @@ extern volatile uint16_t rxWrapLimit;
 #define LOBYTE(x)   ((uint8_t)((x) & 0xFFU))
 #define HIBYTE(x)   ((uint8_t)(((x) >> 8) & 0xFFU))
 
-
-#define USB_CDC_MAX_PACKET_SIZE		512 /* 512 bytes for High-Speed Bulk */
-#define USB_CDC_CONTROL_EP          0U
-#define USB_CDC_DATA_IN_EP          1U
-//#define USB_CDC_NOTIFICATION_EP		2U
-//#define USB_CDC_NOTIFICATION_MPS	8U
-//#define USB_CDC_NOTIFICATION_INTERVAL	0x10U /* 16 microframes at HS; host polling interval */
+#define USB_CDC_MAX_PACKET_SIZE		  512 /* 512 bytes for High-Speed Bulk */
+#define USB_CDC_CONTROL_EP            0U
+#define USB_CDC_DATA_IN_EP            1U
+#define USB_CDC_NOTIFICATION_EP		  2U
+#define USB_CDC_NOTIFICATION_MPS	  8U
+#define USB_CDC_NOTIFICATION_INTERVAL 0x0FU // host polling interval (HS) - 0x10 = theoretical max allowed but doesn't work correctly (flood EP2 packets non ACK...)
 
 #define EP0_SIZE			64
-#define EP_COUNT			2
-
+#define EP_COUNT			3
 
 #define USBD_VID				    	1155
 #define USBD_LANGID_STRING				1033
 #define USBD_PID_HS				   		22336
 
 #define DEVICE_DESCRIPTOR_LENGTH		18
-#define CONFIGURATION_DESCRIPTOR_LENGTH 68 /* 60-byte CDC data config + 7-byte EP2 notification descriptor */
-#define OTHER_SPEED_CONFIGURATION_DESCRIPTOR_LENGTH 60
+#define CONFIGURATION_DESCRIPTOR_LENGTH 75
+#define OTHER_SPEED_CONFIGURATION_DESCRIPTOR_LENGTH 75
 
 #define LANG_DESCRIPTOR_LENGTH			4
 #define MFC_DESCRIPTOR_LENGTH			38
 #define PRODUCT_DESCRIPTOR_LENGTH		44
 #define SERIAL_DESCRIPTOR_LENGTH		50 /* Maximum serial descriptor: 24 ASCII characters as UTF-16LE */
-#define SERIAL_NUMBER_MAX_CHARS		24
+#define SERIAL_NUMBER_MAX_CHARS			24
 #define DEVICE_QUALIFIER_LENGTH			10
 #define INTERFACE_STRING_LENGTH			28
 #define CONFIG_STRING_LENGTH			22
@@ -275,4 +269,3 @@ extern const uint8_t configurationStringDescriptor[CONFIG_STRING_LENGTH];
  * If this function is never called, the driver uses the STM32 96-bit UID.
  */
 uint32_t USB_CDC_SetSerialNumber(const char *serial);
-

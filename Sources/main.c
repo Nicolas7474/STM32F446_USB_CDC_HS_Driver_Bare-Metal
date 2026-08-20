@@ -6,7 +6,6 @@
 #include "../Inc/myConfig.h"
 #include "timers.h"
 
-#include <string.h>
 
 volatile uint8_t flag = 0; // 0 = no data, 1 = data arrived
 
@@ -64,12 +63,13 @@ int main(void)
     while (1)
     {
         /* USB_CDC_UserRxCallBack_EP1() only raises a flag from the ISR.
-         * The actual RX data is processed here, outside interrupt context.
+         * The actual RX data is processed here.
          */
         if (flag)
         {
             flag = 0;
 
+            // EXAMPLE: ECHO DATA RECEIVED
             while (1)
             {
             	// Loop to consume all the requested data
@@ -85,7 +85,7 @@ int main(void)
                  */
                 if (USB_CDC_Write(dest, len) != EP_OK)
                 {
-                    // retry with timeout
+                    // retry with timeout ?
                 }
             }
         }
